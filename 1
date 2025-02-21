@@ -1,0 +1,66 @@
+local WindUI = loadstring(game:HttpGet("https://tree-hub.vercel.app/api/UI/WindUI"))()
+
+local Window = WindUI:CreateWindow({
+    Title = "Adopt Me Trade GUI",
+    Icon = "gift",
+    Author = "DeadHub",
+    Folder = "TradeSettings",
+    Size = UDim2.fromOffset(300, 200), -- Smaller for mobile
+    Transparent = false,
+    Theme = "Light"
+})
+
+local TradeSettingsTab = Window:Tab({ Title = "Trade", Icon = "box" }) -- Shortened title for compact UI
+local MiscTab = Window:Tab({ Title = "Misc", Icon = "settings" }) -- Shortened title for compact UI
+
+TradeSettingsTab:Input({
+    Title = "Victim Name",
+    Placeholder = "Example: Player123",
+    Callback = function(name)
+        WindUI:Notify({
+            Title = "Target Set",
+            Content = "Victim: " .. name,
+            Duration = 3
+        })
+    end
+})
+
+TradeSettingsTab:Button({
+    Title = "Freeze",
+    Desc = "Stops victim from changing trade",
+    Callback = function()
+        WindUI:Notify({
+            Title = "Trade Frozen",
+            Content = "Victim can't modify trade.",
+            Duration = 3
+        })
+    end
+})
+
+TradeSettingsTab:Button({
+    Title = "Force Accept",
+    Desc = "Forces trade to accept",
+    Callback = function()
+        WindUI:Notify({
+            Title = "Trade Accepted",
+            Content = "Trade was forcefully accepted!",
+            Duration = 3
+        })
+    end
+})
+
+-- Fetch available themes from WindUI
+local availableThemes = {}
+for themeName, _ in pairs(WindUI:GetThemes()) do
+    table.insert(availableThemes, themeName)
+end
+
+-- Add Dropdown for theme selection
+MiscTab:Dropdown({
+    Title = "Theme",
+    Values = availableThemes,
+    Value = WindUI:GetCurrentTheme(),
+    Callback = function(selectedTheme)
+        WindUI:SetTheme(selectedTheme)
+    end
+})
