@@ -1,0 +1,51 @@
+10-- Load WindUI
+local WindUI = loadstring(game:HttpGet("https://tree-hub.vercel.app/api/UI/WindUI"))()
+
+-- Create Main Window
+local Window = WindUI:CreateWindow({
+    Title = "Adopt Me",
+    Icon = "zap",
+    Author = "NebulaScripts",
+    Folder = "AutoFarmSettings",
+    Size = UDim2.fromOffset(300, 200), -- Smaller size for mobile
+    Transparent = false,
+    Theme = "Dark"
+})
+
+-- AutoFarm Tab
+local AutoFarmTab = Window:Tab({ Title = "AutoFarm/ESP", Icon = "zap" })
+
+-- 🚀 AutoFarm (Updated with CupidHeart and Rose collection, with warning)
+AutoFarmTab:Button({
+    Title = "Activate AutoFarm",
+    Desc = "Collect Cupid Hearts and Roses automatically!",
+    Callback = function()
+        WindUI:Notify({
+            Title = "⚠ Warning",
+            Content = "You must teleport to Gifts or the Event area before activating AutoFarm.",
+            Duration = 5
+        })
+
+        task.wait(10) -- Wait for the user to read the warning
+
+        WindUI:Notify({
+            Title = "AutoFarm Activated",
+            Content = "Collecting Cupid Hearts and Roses now...",
+            Duration = 5
+        })
+
+        while task.wait(0.25) do
+            for _, heart in pairs(game:GetService("Workspace").StaticMap.Valentines2025.Hearts:GetChildren()) do
+                if heart.Name == "CupidHeart" and heart:FindFirstChild("Collider") then
+                    game:GetService("Workspace").PlayerCharacters[game.Players.LocalPlayer.Name].HumanoidRootPart.CFrame = CFrame.new(heart.Collider.Position)
+                end
+            end
+
+            for _, rose in pairs(game:GetService("Workspace").StaticMap.Valentines2025.Roses:GetChildren()) do
+                if rose.Name == "Rose" and rose:FindFirstChild("Collider") then
+                    game:GetService("Workspace").PlayerCharacters[game.Players.LocalPlayer.Name].HumanoidRootPart.CFrame = CFrame.new(rose.Collider.Position)
+                end
+            end
+        end
+    end
+})
