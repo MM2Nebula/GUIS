@@ -151,5 +151,3 @@ end
 while wait(5) do
     autoJoin()
 end
-
-By reading this, after getting the first items from the first trade, will it trade again?
